@@ -184,8 +184,26 @@ func prometheusHandler() gin.HandlerFunc {
 }
 
 
-func (gp *GinPrometheus) reqSize(c *http.Request) int{
-	size := 0
+func (gp *GinPrometheus) reqSize(r *http.Request) int{
+	s := 0
+	if r.URL != nil {
+		s = len(r.URL.String())
+	}
 
-	return  size
+	s += len(r.Method)
+	s += len(r.Proto)
+
+	for name, values := range r.Header {
+		s += len(name)
+		for _, value := range values {
+			s += len(value)
+		}
+	}
+	s += len(r.Host)
+
+	if r.ContentLength != -1 {
+		s += int(r.ContentLength)
+	}
+
+	return s
 }
