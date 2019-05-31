@@ -1,7 +1,6 @@
 package ginprom
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -135,8 +134,6 @@ func (gp *GinPrometheus) HandlerFunc() gin.HandlerFunc{
 		gp.reqCnt.WithLabelValues(status, c.Request.Method, c.HandlerName(), c.Request.Host, path).Inc()
 		gp.reqSz.Observe(float64(reqSz))
 		gp.resSz.Observe(resSz)
-
-		fmt.Println(status, c.Request.Method, c.HandlerName(), c.Request.Host, path)
 	}
 }
 
@@ -157,11 +154,9 @@ func (gp *GinPrometheus) HitPath(path string) (str string, ok bool) {
 
 		if len(strs) > index {
 			strs = append(strs[:index], strs[index+1:]...)
-			fmt.Println(strs)
 		}
 		if len(kstrs) > index {
 			kstrs = append(kstrs[:index], kstrs[index+1:]...)
-			fmt.Println(kstrs)
 		}
 
 		if strings.Join(strs, "/") == strings.Join(kstrs, "/") {
