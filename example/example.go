@@ -22,6 +22,14 @@ func main() {
 
 	engine.Use(p.HandlerFunc())
 
+	//m := ginprom.Metric{
+	//	Type: "gauge_vec",
+	//	Name: ""
+	//}
+
+
+
+
 	engine.GET("/v1/hello", func(c *gin.Context) {
 		c.JSON(200, "Hello world!")
 	})

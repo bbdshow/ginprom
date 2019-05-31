@@ -115,7 +115,7 @@ func (gp *GinPrometheus) DelParamsPath(path string) {
 func (gp *GinPrometheus) HandlerFunc() gin.HandlerFunc{
 	return func(c *gin.Context) {
 		path := c.Request.URL.String()
-		path, ok := gp.hitPath(path)
+		path, ok := gp.HitPath(path)
 		if !ok {
 			c.Next()
 			return
@@ -140,7 +140,7 @@ func (gp *GinPrometheus) HandlerFunc() gin.HandlerFunc{
 	}
 }
 
-func (gp *GinPrometheus) hitPath(path string) (str string, ok bool) {
+func (gp *GinPrometheus) HitPath(path string) (str string, ok bool) {
 	_, ok = gp.fixedPath.Load(path)
 	if ok {
 		return path, ok
