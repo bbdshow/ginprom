@@ -1,4 +1,4 @@
-module github.com/ginprom
+module github.com/huzhongqing/ginprom
 
 go 1.12
 
