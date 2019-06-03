@@ -113,7 +113,7 @@ func (gp *GinPrometheus) DelParamsPath(path string) {
 
 func (gp *GinPrometheus) HandlerFunc() gin.HandlerFunc{
 	return func(c *gin.Context) {
-		path := c.Request.URL.String()
+		path := c.Request.URL.Path
 		path, ok := gp.HitPath(path)
 		if !ok {
 			c.Next()
