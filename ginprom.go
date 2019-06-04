@@ -126,7 +126,7 @@ func (gp *GinPrometheus) HandlerFunc() gin.HandlerFunc{
 		c.Next()
 
 		status := strconv.Itoa(c.Writer.Status())
-		elapsed := float64(time.Since(start)) / float64(time.Millisecond)
+		elapsed := float64(time.Since(start)) / float64(time.Second)
 		resSz := float64(c.Writer.Size())
 
 		gp.reqDur.Observe(elapsed)
