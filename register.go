@@ -22,8 +22,8 @@ func (gp *GinPrometheus) register(){
 		prometheus.SummaryOpts{
 			Namespace:gp.SystemNS,
 			Subsystem:gp.Subsystem,
-			Name:      "request_duration_seconds",
-			Help:      "The HTTP request latencies in seconds.",
+			Name:      "request_duration_milliseconds",
+			Help:      "The HTTP request latencies in milliseconds.",
 		}, )
 
 	gp.reqSz = prometheus.NewSummary(
