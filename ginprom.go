@@ -102,7 +102,7 @@ func (gp *GinPrometheus) DefaultHandlerFunc() gin.HandlerFunc {
 		}
 
 		start := time.Now()
-		requestSize := gp.reqSize(c.Request)
+		requestSize := gp.ReqSize(c.Request)
 
 		c.Next()
 
