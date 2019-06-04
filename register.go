@@ -10,6 +10,7 @@ type Metric struct {
 	ID          string // metric 标志
 	Name        string
 	Description string
+	Buckets     []float64
 	Type        string
 	Args        []string
 }
@@ -111,6 +112,7 @@ func NewMetric(m *Metric, subsystem string) {
 				Subsystem: subsystem,
 				Name:      m.Name,
 				Help:      m.Description,
+				Buckets:   m.Buckets,
 			},
 			m.Args,
 		)
@@ -120,6 +122,7 @@ func NewMetric(m *Metric, subsystem string) {
 				Subsystem: subsystem,
 				Name:      m.Name,
 				Help:      m.Description,
+				Buckets:   m.Buckets,
 			},
 		)
 	case "summary_vec":
