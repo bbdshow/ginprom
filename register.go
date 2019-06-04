@@ -27,22 +27,19 @@ var (
 		ID:          "reqDur",
 		Name:        "request_duration_seconds",
 		Description: "The HTTP request latencies in seconds.",
-		Type:        "histogram_vec",
-		Args:        []string{"host", "method", "path"}}
+		Type:        "summary"}
 
 	resSz = Metric{
 		ID:          "resSz",
 		Name:        "response_size_bytes",
 		Description: "The HTTP response sizes in bytes.",
-		Type:        "histogram_vec",
-		Args:        []string{"host", "method", "path"}}
+		Type:        "summary"}
 
 	reqSz = Metric{
 		ID:          "reqSz",
 		Name:        "request_size_bytes",
 		Description: "The HTTP request sizes in bytes.",
-		Type:        "histogram_vec",
-		Args:        []string{"host", "method", "path"}}
+		Type:        "summary"}
 )
 
 var defaultMetrics = []Metric{reqCnt, reqDur, resSz, reqSz}

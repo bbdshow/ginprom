@@ -117,17 +117,17 @@ func (gp *GinPrometheus) DefaultHandlerFunc() gin.HandlerFunc {
 
 		reqSz, ok := gp.MetricsMap.Load("reqSz")
 		if ok {
-			reqSz.(Metric).Collector.(*prometheus.HistogramVec).WithLabelValues(c.Request.Host, c.Request.Method, path).Observe(float64(requestSize))
+			reqSz.(Metric).Collector.(prometheus.Summary).Observe(float64(requestSize))
 		}
 
 		resSz, ok := gp.MetricsMap.Load("resSz")
 		if ok {
-			resSz.(Metric).Collector.(*prometheus.HistogramVec).WithLabelValues(c.Request.Host, c.Request.Method, path).Observe(float64(responseSize))
+			resSz.(Metric).Collector.(prometheus.Summary).Observe(float64(responseSize))
 		}
 
 		reqDur, ok := gp.MetricsMap.Load("reqDur")
 		if ok {
-			reqDur.(Metric).Collector.(*prometheus.HistogramVec).WithLabelValues(c.Request.Host, c.Request.Method, path).Observe(float64(elapsed))
+			reqDur.(Metric).Collector.(prometheus.Summary).Observe(float64(elapsed))
 		}
 	}
 }
@@ -172,7 +172,7 @@ func prometheusHandler() gin.HandlerFunc {
 	}
 }
 
-func (gp *GinPrometheus) reqSize(r *http.Request) int {
+func (gp *GinPrometheus) ReqSize(r *http.Request) int {
 	s := 0
 	if r.URL != nil {
 		s = len(r.URL.String())
