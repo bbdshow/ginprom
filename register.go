@@ -5,6 +5,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	CounterType      = "counter"
+	CounterVecType   = "counter_vec"
+	GaugeType        = "gauge"
+	GaugeVecType     = "gauge_vec"
+	HistogramType    = "histogram"
+	HistogramVecType = "histogram_vec"
+	SummaryType      = "summary"
+	SummaryVecType   = "summary_vec"
+)
+
 type Metric struct {
 	Collector   prometheus.Collector
 	ID          string // metric 标志
@@ -20,26 +31,26 @@ var (
 		ID:          "reqCnt",
 		Name:        "requests_total",
 		Description: "How many HTTP requests processed, partitioned by status code and HTTP method.",
-		Type:        "counter_vec",
+		Type:        CounterVecType,
 		Args:        []string{"code", "method", "handler", "host", "path"}}
 
 	reqDur = Metric{
 		ID:          "reqDur",
 		Name:        "request_duration_seconds",
 		Description: "The HTTP request latencies in seconds.",
-		Type:        "summary"}
+		Type:        SummaryType}
 
 	resSz = Metric{
 		ID:          "resSz",
 		Name:        "response_size_bytes",
 		Description: "The HTTP response sizes in bytes.",
-		Type:        "summary"}
+		Type:        SummaryType}
 
 	reqSz = Metric{
 		ID:          "reqSz",
 		Name:        "request_size_bytes",
 		Description: "The HTTP request sizes in bytes.",
-		Type:        "summary"}
+		Type:        SummaryType}
 )
 
 var defaultMetrics = []Metric{reqCnt, reqDur, resSz, reqSz}
@@ -69,7 +80,7 @@ func (gp *GinPrometheus) AddMetrics(m *Metric, subsystem string) error {
 
 func NewMetric(m *Metric, subsystem string) {
 	switch m.Type {
-	case "counter_vec":
+	case CounterVecType:
 		m.Collector = prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Subsystem: subsystem,
@@ -78,7 +89,7 @@ func NewMetric(m *Metric, subsystem string) {
 			},
 			m.Args,
 		)
-	case "counter":
+	case CounterType:
 		m.Collector = prometheus.NewCounter(
 			prometheus.CounterOpts{
 				Subsystem: subsystem,
@@ -86,7 +97,7 @@ func NewMetric(m *Metric, subsystem string) {
 				Help:      m.Description,
 			},
 		)
-	case "gauge_vec":
+	case GaugeVecType:
 		m.Collector = prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: subsystem,
@@ -95,7 +106,7 @@ func NewMetric(m *Metric, subsystem string) {
 			},
 			m.Args,
 		)
-	case "gauge":
+	case GaugeType:
 		m.Collector = prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Subsystem: subsystem,
@@ -103,7 +114,7 @@ func NewMetric(m *Metric, subsystem string) {
 				Help:      m.Description,
 			},
 		)
-	case "histogram_vec":
+	case HistogramVecType:
 		m.Collector = prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Subsystem: subsystem,
@@ -113,7 +124,7 @@ func NewMetric(m *Metric, subsystem string) {
 			},
 			m.Args,
 		)
-	case "histogram":
+	case HistogramType:
 		m.Collector = prometheus.NewHistogram(
 			prometheus.HistogramOpts{
 				Subsystem: subsystem,
@@ -122,7 +133,7 @@ func NewMetric(m *Metric, subsystem string) {
 				Buckets:   m.Buckets,
 			},
 		)
-	case "summary_vec":
+	case SummaryVecType:
 		m.Collector = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
 				Subsystem: subsystem,
@@ -131,7 +142,7 @@ func NewMetric(m *Metric, subsystem string) {
 			},
 			m.Args,
 		)
-	case "summary":
+	case SummaryType:
 		m.Collector = prometheus.NewSummary(
 			prometheus.SummaryOpts{
 				Subsystem: subsystem,
