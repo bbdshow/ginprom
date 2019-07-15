@@ -30,10 +30,10 @@ type GinPrometheus struct {
 }
 
 type Config struct {
-	MetricsPath string
+	MetricsPath string // metrics 信息获取路由， 默认 /metrics
 
-	FixedPath  []string
-	ParamsPath map[string]int
+	FixedPath  []string       // 普通路由
+	ParamsPath map[string]int // key=Path value=:query所在索引位置 例如 /v1/:query 此路由则设置成  {"/v1/:query": 2}
 }
 
 func New(e *gin.Engine, cfg *Config) *GinPrometheus {
