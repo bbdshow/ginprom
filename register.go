@@ -2,6 +2,7 @@ package ginprom
 
 import (
 	"fmt"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -14,9 +15,15 @@ const (
 	HistogramVecType = "histogram_vec"
 	SummaryType      = "summary"
 	SummaryVecType   = "summary_vec"
+
+	IdReqCnt  = "reqCnt"
+	IdReqDur  = "reqDur"
+	IdResSize = "resSize"
+	IdReqSize = "reqSize"
 )
 
 type Metric struct {
+	// Collector 根据Type通过 NewCollector 生成
 	Collector   prometheus.Collector
 	ID          string // metric 标志
 	Name        string
@@ -27,58 +34,60 @@ type Metric struct {
 }
 
 var (
-	reqCnt = Metric{
-		ID:          "reqCnt",
+	ReqCnt = Metric{
+		ID:          IdReqCnt,
 		Name:        "requests_total",
 		Description: "How many HTTP requests processed, partitioned by status code and HTTP method.",
 		Type:        CounterVecType,
-		Args:        []string{"code", "method", "handler", "host", "path"}}
+		Args:        []string{"code", "method", "host", "path"}}
 
-	reqDur = Metric{
-		ID:          "reqDur",
+	ReqDur = Metric{
+		ID:          IdReqDur,
 		Name:        "request_duration_seconds",
 		Description: "The HTTP request latencies in seconds.",
 		Type:        SummaryType}
 
-	resSz = Metric{
-		ID:          "resSz",
+	ResSize = Metric{
+		ID:          IdResSize,
 		Name:        "response_size_bytes",
 		Description: "The HTTP response sizes in bytes.",
 		Type:        SummaryType}
 
-	reqSz = Metric{
-		ID:          "reqSz",
+	ReqSize = Metric{
+		ID:          IdReqSize,
 		Name:        "request_size_bytes",
 		Description: "The HTTP request sizes in bytes.",
 		Type:        SummaryType}
 )
 
-var defaultMetrics = []Metric{reqCnt, reqDur, resSz, reqSz}
+var defaultMetrics = []Metric{ReqCnt, ReqDur, ResSize, ReqSize}
 
-func (gp *GinPrometheus) DefaultRegister(subsystem string) {
+// DefaultRegister subsystem 子系统，如果不存在，可以不填写(单一类型服务可以通过 jobname 区分开)
+func (gp *GinPrometheus) DefaultMetricsRegister(subsystem string) {
 	for i := range defaultMetrics {
-		NewMetric(&defaultMetrics[i], subsystem)
 
-		gp.MetricsMap.Store(defaultMetrics[i].ID, defaultMetrics[i])
+		defaultMetrics[i].NewCollector(subsystem)
+
+		gp.SetMetrics(defaultMetrics[i])
 
 		prometheus.MustRegister(defaultMetrics[i].Collector)
-
 	}
 }
 
-// 不是默认的ID才注册
-func (gp *GinPrometheus) AddMetrics(m *Metric, subsystem string) error {
-	_, ok := gp.MetricsMap.Load(m.ID)
+// AddMetrics 可以在默认的基础上增加其他的metrics
+func (gp *GinPrometheus) AddMetrics(m Metric) error {
+	_, ok := gp.GetMetrics(m.ID)
 	if ok {
 		return fmt.Errorf("%s exists", m.ID)
 	}
-	NewMetric(m, subsystem)
-	gp.MetricsMap.Store(m.ID, *m)
+
+	gp.SetMetrics(m)
 
 	return prometheus.Register(m.Collector)
 }
 
-func NewMetric(m *Metric, subsystem string) {
+// NewCollector, Metric 必须通过次方法才能生效
+func (m *Metric) NewCollector(subsystem string) {
 	switch m.Type {
 	case CounterVecType:
 		m.Collector = prometheus.NewCounterVec(

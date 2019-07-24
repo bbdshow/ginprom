@@ -1,98 +1,132 @@
 package ginprom
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var (
-	defaultMetricsPath = "/metrics"
+const (
+	defMetricsPath = "/metrics"
 )
 
 type GinPrometheus struct {
 	MetricsPath string
-	engine      *gin.Engine
 
-	MetricsMap sync.Map // map[string]Metric // key=metric.ID
+	// 存放 Metrics定义 key=metric.ID value=Metric
+	metricsMap sync.Map
 
-	// 固定路径
-	fixedPath sync.Map
-
-	// 带参数路径
-	paramsPath sync.Map
+	staticPathMap  sync.Map
+	dynamicPathMap sync.Map
 }
 
 type Config struct {
-	MetricsPath string // metrics 信息获取路由， 默认 /metrics
+	// metrics 信息获取路由， 默认 /metrics
+	MetricsPath string
 
-	FixedPath  []string       // 普通路由
-	ParamsPath map[string]int // key=Path value=:query所在索引位置 例如 /v1/:query 此路由则设置成  {"/v1/:query": 2}
+	// 静态路径
+	StaticPath []string
+
+	// key=动态路径 value=:query所在索引位置 例如 /v1/:query 此路由则设置成  {"/v1/:query": 2}
+	DynamicPath map[string]int
 }
 
-func New(e *gin.Engine, cfg *Config) *GinPrometheus {
-	if e == nil {
-		panic("gin engine nil")
+func NewGinProm(engine *gin.Engine, cfg *Config) (*GinPrometheus, error) {
+	if engine == nil || cfg == nil {
+		panic("gin engine and config required")
 	}
 
-	p := GinPrometheus{
-		MetricsPath: defaultMetricsPath,
-		MetricsMap:  sync.Map{},
-		fixedPath:   sync.Map{},
-		paramsPath:  sync.Map{},
+	gp := GinPrometheus{
+		MetricsPath:    defMetricsPath,
+		metricsMap:     sync.Map{},
+		staticPathMap:  sync.Map{},
+		dynamicPathMap: sync.Map{},
 	}
 
 	if cfg.MetricsPath != "" {
-		p.MetricsPath = cfg.MetricsPath
+		gp.MetricsPath = cfg.MetricsPath
+	}
+	var err error
+	for _, v := range cfg.StaticPath {
+		err = gp.SetStaticPath(v)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	for _, v := range cfg.FixedPath {
-		p.SetFixedPath(v)
+	for k, v := range cfg.DynamicPath {
+		err = gp.SetDynamicPath(k, v)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	for k, v := range cfg.ParamsPath {
-		p.SetParamsPath(k, v)
-	}
-
-	return &p
+	return &gp, nil
 }
 
-func (gp *GinPrometheus) Use(e *gin.Engine) {
-	e.GET(gp.MetricsPath, prometheusHandler())
-	gp.engine = e
+// UsePrometheusHandler 注册获取 metrics 信息的路由
+func UsePrometheusHandler(e *gin.Engine, metricsPath string) {
+	e.GET(metricsPath, prometheusHandler())
 }
 
-func (gp *GinPrometheus) SetFixedPath(path string) {
-	_, err := url.Parse(path)
-	if err == nil {
-		gp.fixedPath.Store(path, struct{}{})
+func prometheusHandler() gin.HandlerFunc {
+	handler := promhttp.Handler()
+	return func(c *gin.Context) {
+		handler.ServeHTTP(c.Writer, c.Request)
 	}
 }
 
-func (gp *GinPrometheus) DelFixedPath(path string) {
-	gp.fixedPath.Delete(path)
+func (gp *GinPrometheus) SetStaticPath(path string) error {
+	u, err := url.Parse(path)
+	if err != nil {
+		return err
+	}
+	gp.staticPathMap.Store(u.String(), struct{}{})
+
+	return nil
+}
+
+func (gp *GinPrometheus) DelStaticPath(path string) {
+	gp.staticPathMap.Delete(path)
 }
 
 // index 占位符相对路由位置 1是起始位置  / 分割数组
-func (gp *GinPrometheus) SetParamsPath(path string, index int) {
-	_, err := url.Parse(path)
-	if err == nil {
-		gp.paramsPath.Store(path, index)
+func (gp *GinPrometheus) SetDynamicPath(path string, index int) error {
+	u, err := url.Parse(path)
+	if err != nil {
+		return err
 	}
+	gp.dynamicPathMap.Store(u.String(), index)
+
+	return nil
 }
 
-func (gp *GinPrometheus) DelParamsPath(path string) {
-	gp.paramsPath.Delete(path)
+func (gp *GinPrometheus) DelDynamicPath(path string) {
+	gp.dynamicPathMap.Delete(path)
 }
 
-// DefaultHandlerFunc 必须要使用DefaultRegister注册后才能使用
-func (gp *GinPrometheus) DefaultHandlerFunc() gin.HandlerFunc {
+func (gp *GinPrometheus) GetMetrics(id string) (Metric, bool) {
+	v, ok := gp.metricsMap.Load(id)
+	if !ok {
+		return Metric{}, ok
+
+	}
+	return v.(Metric), ok
+}
+
+func (gp *GinPrometheus) SetMetrics(m Metric) {
+	gp.metricsMap.Store(m.ID, m)
+}
+
+// DefaultMetricsMid 必须要使用DefaultRegister注册后才能使用
+func DefaultMetricsMid(gp *GinPrometheus) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 		path, ok := gp.HitPath(path)
@@ -102,7 +136,7 @@ func (gp *GinPrometheus) DefaultHandlerFunc() gin.HandlerFunc {
 		}
 
 		start := time.Now()
-		requestSize := gp.ReqSize(c.Request)
+		requestSize := CalcReqSize(c.Request)
 
 		c.Next()
 
@@ -110,38 +144,38 @@ func (gp *GinPrometheus) DefaultHandlerFunc() gin.HandlerFunc {
 		elapsed := float64(time.Since(start)) / float64(time.Second)
 		responseSize := float64(c.Writer.Size())
 
-		reqCnt, ok := gp.MetricsMap.Load("reqCnt")
+		reqCnt, ok := gp.GetMetrics(IdReqCnt)
 		if ok {
-			reqCnt.(Metric).Collector.(*prometheus.CounterVec).WithLabelValues(status, c.Request.Method, c.HandlerName(), c.Request.Host, path).Inc()
+			reqCnt.Collector.(*prometheus.CounterVec).WithLabelValues(status, c.Request.Method, c.Request.Host, path).Inc()
 		}
 
-		reqSz, ok := gp.MetricsMap.Load("reqSz")
+		reqSz, ok := gp.GetMetrics(IdReqSize)
 		if ok {
-			reqSz.(Metric).Collector.(prometheus.Summary).Observe(float64(requestSize))
+			reqSz.Collector.(prometheus.Summary).Observe(float64(requestSize))
 		}
 
-		resSz, ok := gp.MetricsMap.Load("resSz")
+		resSz, ok := gp.GetMetrics(IdResSize)
 		if ok {
-			resSz.(Metric).Collector.(prometheus.Summary).Observe(float64(responseSize))
+			resSz.Collector.(prometheus.Summary).Observe(float64(responseSize))
 		}
 
-		reqDur, ok := gp.MetricsMap.Load("reqDur")
+		reqDur, ok := gp.GetMetrics(IdReqDur)
 		if ok {
-			reqDur.(Metric).Collector.(prometheus.Summary).Observe(float64(elapsed))
+			reqDur.Collector.(prometheus.Summary).Observe(float64(elapsed))
 		}
 	}
 }
 
 func (gp *GinPrometheus) HitPath(path string) (str string, ok bool) {
-	_, ok = gp.fixedPath.Load(path)
+	_, ok = gp.staticPathMap.Load(path)
 	if ok {
 		return path, ok
 	}
 
 	exists := false
 
-	// 带参数的路径
-	gp.paramsPath.Range(func(k, v interface{}) bool {
+	// 动态路径解析
+	gp.dynamicPathMap.Range(func(k, v interface{}) bool {
 		index := v.(int)
 
 		strs := strings.Split(path, "/")
@@ -165,14 +199,7 @@ func (gp *GinPrometheus) HitPath(path string) (str string, ok bool) {
 	return path, exists
 }
 
-func prometheusHandler() gin.HandlerFunc {
-	h := promhttp.Handler()
-	return func(c *gin.Context) {
-		h.ServeHTTP(c.Writer, c.Request)
-	}
-}
-
-func (gp *GinPrometheus) ReqSize(r *http.Request) int {
+func CalcReqSize(r *http.Request) int {
 	s := 0
 	if r.URL != nil {
 		s = len(r.URL.String())
