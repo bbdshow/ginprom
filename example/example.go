@@ -14,10 +14,10 @@ func main() {
 	engine := gin.New()
 
 	cfg := ginprom.Config{
-		StaticPath: []string{"/v1/hello"},
-		DynamicPath: map[string]int{
-			"/v1/hello/:girl":        3,
-			"/v1/call/handsome/:boy": 4,
+		PathMap: map[string]int{
+			"/v1/hello":                 0,
+			"/v1/hello/:girl":           3,
+			"/v1/call/handsome/:boy/ok": 4,
 		},
 	}
 
@@ -68,7 +68,7 @@ func main() {
 		c.JSON(200, "hello "+c.Param("girl"))
 	})
 
-	engine.GET("/v1/call/handsome/:boy", func(c *gin.Context) {
+	engine.GET("/v1/call/handsome/:boy/ok", func(c *gin.Context) {
 		c.JSON(200, "call "+c.Param("boy"))
 	})
 

@@ -19,23 +19,21 @@ const (
 
 type GinPrometheus struct {
 	MetricsPath string
+	rwMutex     sync.RWMutex
 
 	// 存放 Metrics定义 key=metric.ID value=Metric
-	metricsMap sync.Map
-
-	staticPathMap  sync.Map
-	dynamicPathMap sync.Map
+	metricsMap map[string]Metric
+	// pathMap 路径存储， key - path, value -  动态参数所在索引位置， 0 - 静态路由
+	pathMap map[string]int
 }
 
 type Config struct {
 	// metrics 信息获取路由， 默认 /metrics
 	MetricsPath string
 
-	// 静态路径
-	StaticPath []string
-
 	// key=动态路径 value=:query所在索引位置 例如 /v1/:query 此路由则设置成  {"/v1/:query": 2}
-	DynamicPath map[string]int
+	// 静态路径 int = 0
+	PathMap map[string]int
 }
 
 func NewGinProm(engine *gin.Engine, cfg *Config) (*GinPrometheus, error) {
@@ -44,26 +42,17 @@ func NewGinProm(engine *gin.Engine, cfg *Config) (*GinPrometheus, error) {
 	}
 
 	gp := GinPrometheus{
-		MetricsPath:    defMetricsPath,
-		metricsMap:     sync.Map{},
-		staticPathMap:  sync.Map{},
-		dynamicPathMap: sync.Map{},
+		MetricsPath: defMetricsPath,
+		metricsMap:  make(map[string]Metric),
+		pathMap:     make(map[string]int),
 	}
 
 	if cfg.MetricsPath != "" {
 		gp.MetricsPath = cfg.MetricsPath
 	}
-	var err error
-	for _, v := range cfg.StaticPath {
-		err = gp.SetStaticPath(v)
-		if err != nil {
-			return nil, err
-		}
-	}
 
-	for k, v := range cfg.DynamicPath {
-		err = gp.SetDynamicPath(k, v)
-		if err != nil {
+	for path, index := range cfg.PathMap {
+		if err := gp.SetPath(path, index); err != nil {
 			return nil, err
 		}
 	}
@@ -83,46 +72,51 @@ func prometheusHandler() gin.HandlerFunc {
 	}
 }
 
-func (gp *GinPrometheus) SetStaticPath(path string) error {
+func (gp *GinPrometheus) GetPath(path string) (index int, ok bool) {
+	gp.rwMutex.RLock()
+	defer gp.rwMutex.RUnlock()
+
+	index, ok = gp.pathMap[path]
+
+	return index, ok
+}
+
+// SetPath index 占位符相对路由位置 1是起始位置  / 分割数组
+// 静态路径，index = 0
+func (gp *GinPrometheus) SetPath(path string, index int) error {
 	u, err := url.Parse(path)
 	if err != nil {
 		return err
 	}
-	gp.staticPathMap.Store(u.String(), struct{}{})
+
+	gp.rwMutex.Lock()
+	defer gp.rwMutex.Unlock()
+
+	gp.pathMap[u.String()] = index
 
 	return nil
 }
 
-func (gp *GinPrometheus) DelStaticPath(path string) {
-	gp.staticPathMap.Delete(path)
-}
+func (gp *GinPrometheus) DelPath(path string) {
+	gp.rwMutex.Lock()
+	defer gp.rwMutex.Unlock()
 
-// index 占位符相对路由位置 1是起始位置  / 分割数组
-func (gp *GinPrometheus) SetDynamicPath(path string, index int) error {
-	u, err := url.Parse(path)
-	if err != nil {
-		return err
-	}
-	gp.dynamicPathMap.Store(u.String(), index)
-
-	return nil
-}
-
-func (gp *GinPrometheus) DelDynamicPath(path string) {
-	gp.dynamicPathMap.Delete(path)
+	delete(gp.pathMap, path)
 }
 
 func (gp *GinPrometheus) GetMetrics(id string) (Metric, bool) {
-	v, ok := gp.metricsMap.Load(id)
-	if !ok {
-		return Metric{}, ok
+	gp.rwMutex.RLock()
+	defer gp.rwMutex.RUnlock()
 
-	}
-	return v.(Metric), ok
+	v, ok := gp.metricsMap[id]
+	return v, ok
 }
 
 func (gp *GinPrometheus) SetMetrics(m Metric) {
-	gp.metricsMap.Store(m.ID, m)
+	gp.rwMutex.Lock()
+	defer gp.rwMutex.Unlock()
+
+	gp.metricsMap[m.ID] = m
 }
 
 // DefaultMetricsMid 必须要使用DefaultRegister注册后才能使用
@@ -167,19 +161,21 @@ func DefaultMetricsMid(gp *GinPrometheus) gin.HandlerFunc {
 }
 
 func (gp *GinPrometheus) HitPath(path string) (str string, ok bool) {
-	_, ok = gp.staticPathMap.Load(path)
+	_, ok = gp.GetPath(path)
 	if ok {
 		return path, ok
 	}
 
 	exists := false
 
+	gp.rwMutex.RLock()
+	defer gp.rwMutex.RUnlock()
+
 	// 动态路径解析
-	gp.dynamicPathMap.Range(func(k, v interface{}) bool {
-		index := v.(int)
+	for dynamicPath, index := range gp.pathMap {
 
 		strs := strings.Split(path, "/")
-		kstrs := strings.Split(k.(string), "/")
+		kstrs := strings.Split(dynamicPath, "/")
 
 		if len(strs) > index {
 			strs = append(strs[:index], strs[index+1:]...)
@@ -189,12 +185,11 @@ func (gp *GinPrometheus) HitPath(path string) (str string, ok bool) {
 		}
 
 		if strings.Join(strs, "/") == strings.Join(kstrs, "/") {
-			path = k.(string)
+			path = dynamicPath
 			exists = true
-			return false
+			break
 		}
-		return true
-	})
+	}
 
 	return path, exists
 }
