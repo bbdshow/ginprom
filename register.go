@@ -16,10 +16,11 @@ const (
 	SummaryType      = "summary"
 	SummaryVecType   = "summary_vec"
 
-	IdReqCnt  = "reqCnt"
-	IdReqDur  = "reqDur"
-	IdResSize = "resSize"
-	IdReqSize = "reqSize"
+	IdReqCnt     = "reqCnt"
+	IdReqDur     = "reqDur"
+	IdResSize    = "resSize"
+	IdReqSize    = "reqSize"
+	IdReqElapsed = "reqElapsed"
 )
 
 type Metric struct {
@@ -58,9 +59,17 @@ var (
 		Name:        "request_size_bytes",
 		Description: "The HTTP request sizes in bytes.",
 		Type:        SummaryType}
+
+	ReqElapsed = Metric{
+		ID:          IdReqElapsed,
+		Name:        "http_request_elapsed_second",
+		Description: "http api request elapsed",
+		Type:        HistogramVecType,
+		Args:        []string{"method", "path"},
+	}
 )
 
-var defaultMetrics = []Metric{ReqCnt, ReqDur, ResSize, ReqSize}
+var defaultMetrics = []Metric{ReqCnt, ReqDur, ResSize, ReqSize, ReqElapsed}
 
 // DefaultRegister subsystem 子系统，如果不存在，可以不填写(单一类型服务可以通过 jobname 区分开)
 func (gp *GinPrometheus) DefaultMetricsRegister(subsystem string) {

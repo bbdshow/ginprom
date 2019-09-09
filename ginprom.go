@@ -156,6 +156,11 @@ func DefaultMetricsMid(gp *GinPrometheus) gin.HandlerFunc {
 		if ok {
 			reqDur.Collector.(prometheus.Summary).Observe(float64(elapsed))
 		}
+
+		reqElapsed, ok := gp.GetMetrics(IdReqElapsed)
+		if ok {
+			reqElapsed.Collector.(*prometheus.HistogramVec).WithLabelValues(c.Request.Method, path).Observe(float64(elapsed))
+		}
 	}
 }
 
